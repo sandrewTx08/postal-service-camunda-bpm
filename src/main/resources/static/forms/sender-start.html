@@ -1,0 +1,321 @@
+<script src="https://unpkg.com/vue@3"></script>
+<script src="https://unpkg.com/axios"></script>
+
+<form class="form-horizontal" role="form" id="portalServiceForm">
+  <h2>Receiver</h2>
+  <div class="form-group">
+    <label for="receiverUserId" class="col-sm-2 control-label"
+      >User first name</label
+    >
+    <div class="col-sm-10">
+      <input
+        type="text"
+        ng-model="receiverSelectedFirstName"
+        uib-typeahead="user.firstName for user in getLocation($viewValue, receiverUserLastName)"
+        class="form-control"
+        ng-value="receiverUser.firstName"
+        typeahead-on-select="receiverUser = $item"
+      />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="receiverUserId" class="col-sm-2 control-label"
+      >User last name</label
+    >
+    <div class="col-sm-10">
+      <input
+        type="text"
+        ng-model="receiverUserLastName"
+        uib-typeahead="user.lastName for user in getLocation(receiverSelectedFirstName, $viewValue)"
+        class="form-control"
+        ng-value="receiverUser.lastName"
+        typeahead-on-select="receiverUser = $item"
+      />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label for="receiverUserId" class="col-sm-2 control-label"
+      >User last name</label
+    >
+    <div class="col-sm-10">
+      <input
+        type="text"
+        ng-value="receiverUser.email"
+        class="form-control"
+        readonly
+      />
+    </div>
+  </div>
+
+  <div ng-if="senderUserProfile">
+    <h2>Sender</h2>
+
+    <div class="form-group">
+      <label for="senderFirstName" class="col-sm-2 control-label"
+        >First Name</label
+      >
+      <div class="col-sm-10">
+        <input
+          type="text"
+          name="senderFirstName"
+          ng-value="senderUserProfile.firstName"
+          class="form-control"
+          readonly
+        />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label for="senderLastName" class="col-sm-2 control-label"
+        >Last Name</label
+      >
+      <div class="col-sm-10">
+        <input
+          type="text"
+          name="senderLastName"
+          ng-value="senderUserProfile.lastName"
+          class="form-control"
+          readonly
+        />
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label
+        ng-show="senderCorrection !== undefined"
+        class="control-label col-sm-2"
+        for="exitFlow"
+        >Cancel package delivery</label
+      >
+      <div class="col-sm-10">
+        <input
+          type="{{ senderCorrection !== undefined ? 'checkbox' : 'hidden' }}"
+          name="exitFlow"
+          cam-variable-name="exitFlow"
+          cam-variable-type="Boolean"
+          class="form-control"
+        />
+      </div>
+    </div>
+  </div>
+
+  <div id="zipCodeList"></div>
+
+  <hr />
+
+  <div id="senderPackageList"></div>
+
+  <script cam-script type="text/form-script">
+    camForm.variableManager.fetchVariable('senderCorrection');
+    camForm.variableManager.fetchVariable('senderUserProfile');
+    camForm.variableManager.fetchVariable('receiverUserProfile');
+    camForm.variableManager.fetchVariable('senderPackages');
+    camForm.variableManager.fetchVariable('receiverZipcode');
+
+    camForm.on('variables-fetched', () => {
+      $scope.senderCorrection = camForm.variableManager.variable('senderCorrection').value;
+      $scope.senderUserProfile = camForm.variableManager.variable('senderUserProfile').value;
+    });
+
+    camForm.on('submit', () => {
+      if (camForm.variableManager.variable('receiverUserProfile')?.value) {
+        return;
+      }
+
+      camForm.variableManager.createVariable({
+        name: 'receiverUserProfile',
+        value: $scope.receiverUser,
+        type: 'json',
+        valueInfo: {
+          serializationDataFormat: 'application/json',
+        }
+      });
+    });
+
+    $scope.getLocation = async (firstNameLike, lastNameLike) => {
+      const { data } = await axios.get('/engine-rest/user', { params: { firstNameLike, lastNameLike } });
+
+      return data;
+    };
+
+    Vue.createApp({
+      data() {
+        camForm.on('variables-fetched', () => {
+          this.zipCodeData = camForm.variableManager.variable('receiverZipcode').value;
+        });
+
+        camForm.on('submit', () => {
+          if (camForm.variableManager.variable('receiverZipcode')?.value) {
+            return;
+          }
+
+          camForm.variableManager.createVariable({
+            name: 'receiverZipcode',
+            value: this.zipCodeData,
+            type: 'json',
+            valueInfo: {
+              serializationDataFormat: 'application/json',
+            }
+          });
+        });
+
+        return {
+          zipcode: null,
+          zipCodeData: null,
+        };
+      },
+
+      watch: {
+        zipcode(newValue) {
+          this.getZipCode(newValue);
+        },
+      },
+
+      methods: {
+        async getZipCode(code) {
+          const { data } = await axios.get("/zipcode/" + code);
+          this.zipCodeData = data;
+        },
+      },
+
+      template: `
+        <h2>Receiver Address</h2>
+
+        <div class="form-group">
+          <label for="zipcode" class="col-sm-2 control-label">Zip Code</label>
+          <div class="col-sm-10">
+            <input type="number" min="10000" step="1" v-model="zipcode" class="form-control" name="zipcode" required />
+            <div class="help-block">US Zip code ex: 90210</div>
+          </div>
+        </div>
+
+        <template v-if="zipCodeData">
+          <div class="form-group">
+            <label for="post code" class="col-sm-2 control-label">Post Code</label>
+            <div class="col-sm-10">
+              <input type="text" min="3" v-model="zipCodeData['post code']" class="form-control" name="post code" required readonly />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="country abbreviation" class="col-sm-2 control-label">Country Abbreviation</label>
+            <div class="col-sm-10">
+              <input type="text" min="3" v-model="zipCodeData['country abbreviation']" class="form-control" name="country abbreviation" required readonly />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="country" class="col-sm-2 control-label">Country</label>
+            <div class="col-sm-10">
+              <input type="text" min="3" v-model="zipCodeData['country']" class="form-control" name="country" required readonly />
+            </div>
+          </div>
+
+          <hr />
+
+          <div class="form-group">
+            <label for="street" class="col-sm-2 control-label">Street</label>
+            <div class="col-sm-10">
+              <input type="text" min="3" v-model="zipCodeData['street']" class="form-control" name="street" required />
+            </div>
+          </div>
+
+          <div class="form-group">
+            <label for="home" class="col-sm-2 control-label">Home</label>
+            <div class="col-sm-10">
+              <input type="text" min="3" v-model="zipCodeData['home']" class="form-control" name="home" required />
+            </div>
+          </div>
+
+          <template v-if="zipCodeData.places.length > 0">
+            <hr />
+
+            <h3>Places</h3>
+
+            <template v-for="place in zipCodeData.places">
+              <div class="form-group">
+                <label for="state" class="col-sm-2 control-label">State</label>
+                <div class="col-sm-10">
+                  <input type="text" min="3" v-model="place['state']" class="form-control" name="state" required readonly />
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="place name" class="col-sm-2 control-label">Place Name</label>
+                <div class="col-sm-10">
+                  <input type="text" min="3" v-model="place['place name']" class="form-control" name="place name" required readonly />
+                </div>
+              </div>
+            </template>
+          </template>
+        </template>
+      `,
+    }).mount("#zipCodeList");
+
+    Vue.createApp({
+      data() {
+        camForm.on('variables-fetched', () => {
+          this.packageData = camForm.variableManager.variable('senderPackages')?.value || [];
+        });
+
+        camForm.on("submit", () => {
+          if (camForm.variableManager.variable('senderPackages')?.value) {
+            return;
+          }
+
+          camForm.variableManager.createVariable({
+            name: 'senderPackages',
+            value: this.packageData,
+            type: 'json',
+            valueInfo: {
+              serializationDataFormat: 'application/json',
+            }
+          });
+        });
+
+        return {
+          packageData: [],
+        }
+      },
+
+      template: `
+      <h2>Package</h2>
+
+      <table class="table table-bordered">
+        <thead>
+          <tr>
+            <th>Action</th>
+            <th>Package Name</th>
+            <th>Height (Less than 3)</th>
+            <th>Width (Less than 2)</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          <tr v-for="(package, index) in packageData" :key="index">
+            <td>
+              <button type="button" class="btn btn-danger" @click="packageData.splice(index, 1)">Delete</button>
+            </td>
+
+            <td>
+              <input type="text" min="3" v-model="package['name']" class="form-control" name="pname" required />
+            </td>
+
+            <td>
+              <input type="number" min="0.01" step="0.01" v-model="package['heigth']" class="form-control" name="heigth" required />
+            </td>
+
+            <td>
+              <input type="number" min="0.01" step="0.01" v-model="package['width']" class="form-control" name="width" required />
+            </td>
+          </tr>
+        </tbody>
+      </table>
+
+      <button class="btn btn-success" @click="packageData.unshift({})">Add package</button>
+    `
+    }).mount("#senderPackageList");
+  </script>
+</form>
