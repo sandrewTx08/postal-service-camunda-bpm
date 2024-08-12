@@ -5,46 +5,62 @@
   <h2>Receiver</h2>
   <div class="form-group">
     <label for="receiverUserId" class="col-sm-2 control-label"
-      >User first name</label
+      >First name</label
     >
     <div class="col-sm-10">
       <input
         type="text"
         ng-model="receiverSelectedFirstName"
-        uib-typeahead="user.firstName for user in getLocation($viewValue, receiverUserLastName)"
+        uib-typeahead="user.firstName for user in getUserProfile($viewValue, receiverUserLastName)"
         class="form-control"
-        ng-value="receiverUser.firstName"
-        typeahead-on-select="receiverUser = $item"
+        ng-value="receiverUserProfile.firstName"
+        typeahead-on-select="receiverUserProfile = $item"
+        ng-readonly="receivedPackage"
       />
     </div>
   </div>
 
   <div class="form-group">
-    <label for="receiverUserId" class="col-sm-2 control-label"
-      >User last name</label
-    >
+    <label for="receiverUserId" class="col-sm-2 control-label">Last name</label>
     <div class="col-sm-10">
       <input
         type="text"
         ng-model="receiverUserLastName"
-        uib-typeahead="user.lastName for user in getLocation(receiverSelectedFirstName, $viewValue)"
+        uib-typeahead="user.lastName for user in getUserProfile(receiverSelectedFirstName, $viewValue)"
         class="form-control"
-        ng-value="receiverUser.lastName"
-        typeahead-on-select="receiverUser = $item"
+        ng-value="receiverUserProfile.lastName"
+        typeahead-on-select="receiverUserProfile = $item"
+        ng-readonly="receivedPackage"
       />
     </div>
   </div>
 
   <div class="form-group">
-    <label for="receiverUserId" class="col-sm-2 control-label"
-      >User last name</label
-    >
+    <label for="receiverUserId" class="col-sm-2 control-label">Email</label>
     <div class="col-sm-10">
       <input
         type="text"
-        ng-value="receiverUser.email"
+        ng-value="receiverUserProfile.email"
         class="form-control"
         readonly
+      />
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label
+      ng-show="senderCorrection !== undefined"
+      class="control-label col-sm-2"
+      for="exitFlow"
+      >Cancel package delivery</label
+    >
+    <div class="col-sm-10">
+      <input
+        type="{{ senderCorrection !== undefined ? 'checkbox' : 'hidden' }}"
+        name="exitFlow"
+        cam-variable-name="exitFlow"
+        cam-variable-type="Boolean"
+        class="form-control"
       />
     </div>
   </div>
@@ -57,13 +73,8 @@
         >First Name</label
       >
       <div class="col-sm-10">
-        <input
-          type="text"
-          name="senderFirstName"
-          ng-value="senderUserProfile.firstName"
-          class="form-control"
-          readonly
-        />
+        <input type="text" name="senderFirstName"
+        ng-value="senderUserProfile.firstName" class="form-control" readonly= />
       </div>
     </div>
 
@@ -83,19 +94,14 @@
     </div>
 
     <div class="form-group">
-      <label
-        ng-show="senderCorrection !== undefined"
-        class="control-label col-sm-2"
-        for="exitFlow"
-        >Cancel package delivery</label
-      >
+      <label for="senderEmail" class="col-sm-2 control-label">Email</label>
       <div class="col-sm-10">
         <input
-          type="{{ senderCorrection !== undefined ? 'checkbox' : 'hidden' }}"
-          name="exitFlow"
-          cam-variable-name="exitFlow"
-          cam-variable-type="Boolean"
+          type="text"
+          name="senderEmail"
+          ng-value="senderUserProfile.email"
           class="form-control"
+          readonly
         />
       </div>
     </div>
@@ -113,17 +119,17 @@
     camForm.variableManager.fetchVariable('receiverUserProfile');
     camForm.variableManager.fetchVariable('senderPackages');
     camForm.variableManager.fetchVariable('receiverZipcode');
+    camForm.variableManager.fetchVariable('receivedPackage');
 
     camForm.on('variables-fetched', () => {
       $scope.senderCorrection = camForm.variableManager.variable('senderCorrection').value;
       $scope.senderUserProfile = camForm.variableManager.variable('senderUserProfile').value;
+      $scope.receiverUserProfile = camForm.variableManager.variable('receiverUserProfile').value;
+      $scope.receivedPackage = camForm.variableManager.variable('receivedPackage').value;
     });
 
     camForm.on('submit', () => {
-      if (camForm.variableManager.variable('receiverUserProfile')?.value) {
-        return;
-      }
-
+      camForm.variableManager.destroyVariable('receiverUserProfile');
       camForm.variableManager.createVariable({
         name: 'receiverUserProfile',
         value: $scope.receiverUser,
@@ -134,7 +140,7 @@
       });
     });
 
-    $scope.getLocation = async (firstNameLike, lastNameLike) => {
+    $scope.getUserProfile = async (firstNameLike, lastNameLike) => {
       const { data } = await axios.get('/engine-rest/user', { params: { firstNameLike, lastNameLike } });
 
       return data;
@@ -147,10 +153,7 @@
         });
 
         camForm.on('submit', () => {
-          if (camForm.variableManager.variable('receiverZipcode')?.value) {
-            return;
-          }
-
+          camForm.variableManager.destroyVariable('receiverZipcode');
           camForm.variableManager.createVariable({
             name: 'receiverZipcode',
             value: this.zipCodeData,
@@ -162,6 +165,7 @@
         });
 
         return {
+          camForm,
           zipcode: null,
           zipCodeData: null,
         };
@@ -186,7 +190,7 @@
         <div class="form-group">
           <label for="zipcode" class="col-sm-2 control-label">Zip Code</label>
           <div class="col-sm-10">
-            <input type="number" min="10000" step="1" v-model="zipcode" class="form-control" name="zipcode" required />
+            <input :readonly="camForm.variableManager.variable('receivedPackage')?.value" type="number" min="10000" step="1" v-model="zipcode" class="form-control" name="zipcode" required />
             <div class="help-block">US Zip code ex: 90210</div>
           </div>
         </div>
@@ -218,14 +222,14 @@
           <div class="form-group">
             <label for="street" class="col-sm-2 control-label">Street</label>
             <div class="col-sm-10">
-              <input type="text" min="3" v-model="zipCodeData['street']" class="form-control" name="street" required />
+              <input type="text" :readonly="camForm.variableManager.variable('receivedPackage')?.value" min="3" v-model="zipCodeData['street']" class="form-control" name="street" required />
             </div>
           </div>
 
           <div class="form-group">
             <label for="home" class="col-sm-2 control-label">Home</label>
             <div class="col-sm-10">
-              <input type="text" min="3" v-model="zipCodeData['home']" class="form-control" name="home" required />
+              <input type="text" :readonly="camForm.variableManager.variable('receivedPackage')?.value" min="3" v-model="zipCodeData['home']" class="form-control" name="home" required />
             </div>
           </div>
 
@@ -245,7 +249,7 @@
               <div class="form-group">
                 <label for="place name" class="col-sm-2 control-label">Place Name</label>
                 <div class="col-sm-10">
-                  <input type="text" min="3" v-model="place['place name']" class="form-control" name="place name" required readonly />
+                  <input  type="text" min="3" v-model="place['place name']" class="form-control" name="place name" required readonly />
                 </div>
               </div>
             </template>
@@ -261,10 +265,7 @@
         });
 
         camForm.on("submit", () => {
-          if (camForm.variableManager.variable('senderPackages')?.value) {
-            return;
-          }
-
+          camForm.variableManager.destroyVariable('senderPackages');
           camForm.variableManager.createVariable({
             name: 'senderPackages',
             value: this.packageData,
@@ -276,6 +277,7 @@
         });
 
         return {
+          camForm,
           packageData: [],
         }
       },
@@ -286,7 +288,7 @@
       <table class="table table-bordered">
         <thead>
           <tr>
-            <th>Action</th>
+            <th v-if="!camForm.variableManager.variable('receivedPackage')?.value">Action</th>
             <th>Package Name</th>
             <th>Height (Less than 3)</th>
             <th>Width (Less than 2)</th>
@@ -295,7 +297,7 @@
 
         <tbody>
           <tr v-for="(package, index) in packageData" :key="index">
-            <td>
+            <td v-if="!camForm.variableManager.variable('receivedPackage')?.value">
               <button type="button" class="btn btn-danger" @click="packageData.splice(index, 1)">Delete</button>
             </td>
 
@@ -314,7 +316,7 @@
         </tbody>
       </table>
 
-      <button class="btn btn-success" @click="packageData.unshift({})">Add package</button>
+      <button v-if="!camForm.variableManager.variable('receivedPackage')?.value" class="btn btn-success" @click="packageData.unshift({})">Add package</button>
     `
     }).mount("#senderPackageList");
   </script>
